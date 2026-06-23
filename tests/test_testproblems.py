@@ -12,6 +12,7 @@ from desdeo.problem.testproblems import (
     dtlz2,
     dtlz4,
     forest_problem,
+    lame_superspheres,
     mcwb_equilateral_tbeam_problem,
     mcwb_hollow_rectangular_problem,
     mcwb_ragsdell1976_problem,
@@ -25,6 +26,7 @@ from desdeo.problem.testproblems import (
     river_pollution_problem,
     river_pollution_scenario,
     spanish_sustainability_problem,
+    water_management,
     zdt1,
     zdt2,
     zdt3,
@@ -118,6 +120,53 @@ def test_dtlz4():
 
     f1 = res["f_1"]
     assert np.isclose(f1, 1.0075)
+
+
+@pytest.mark.testproblem
+@pytest.mark.parametrize("gamma", [0.5, 1.0, 2.0, 3.0])
+@pytest.mark.parametrize(("n_variables", "n_objectives"), [(2, 2), (5, 3), (7, 4)])
+def test_lame_superspheres(gamma, n_variables, n_objectives):
+    """Test that the Lamé superspheres problem matches the supersphere geometry.
+
+    For any decision vector, the objectives must lie on a Lamé supersphere of
+    radius (1 + g(x)), i.e. sum_i f_i**gamma == (1 + g(x))**gamma (Emmerich &
+    Deutz, 2007, Eqs. 8 and 13). The Pareto front is the g(x) == 0 case.
+    """
+    problem = lame_superspheres(
+        n_variables=n_variables,
+        n_objectives=n_objectives,
+        gamma=gamma,
+    )
+
+    assert len(problem.variables) == n_variables
+    assert len(problem.objectives) == n_objectives
+
+    rng = np.random.default_rng(42)
+    n_samples = 16
+    xs = {f"x_{i}": rng.random(n_samples).tolist() for i in range(1, n_variables + 1)}
+
+    evaluator = PolarsEvaluator(problem)
+    res = evaluator.evaluate(xs)
+
+    objs = np.array([res[f"f_{m}"].to_numpy() for m in range(1, n_objectives + 1)])
+    g = res["g"].to_numpy()
+
+    assert np.all(np.isfinite(objs))
+
+    # Every evaluated point must lie on the supersphere of radius (1 + g(x)).
+    lhs = np.sum(objs**gamma, axis=0)
+    rhs = (1.0 + g) ** gamma
+    assert np.allclose(lhs, rhs)
+
+
+@pytest.mark.testproblem
+def test_lame_superspheres_invalid_arguments():
+    """Test that invalid objective/variable counts are rejected."""
+    with pytest.raises(ValueError, match="n_objectives must be at least 2"):
+        lame_superspheres(n_variables=2, n_objectives=1)
+
+    with pytest.raises(ValueError, match="n_variables must be greater than or equal"):
+        lame_superspheres(n_variables=2, n_objectives=3)
 
 
 @pytest.mark.testproblem
@@ -679,3 +728,35 @@ def test_zdt6():
     assert np.isclose(f1, 1.0)
     assert np.isclose(f2, 8.45135530798638410874)
     assert np.isclose(g, 8.568067737283432)
+
+
+@pytest.mark.testproblem
+def test_water_management():
+    """Test that water management problem evaluates correctly."""
+    problem = water_management()
+    evaluator = PolarsEvaluator(problem)
+
+    # Representative solutions from Table III of Ray, Tai & Seow (2001). The table values are
+    # rounded to 5-6 significant figures, so a loose relative tolerance is used. The table also
+    # contains scattered obvious factor of 10 typos in the f_3 and f_4 columns. These entries have been
+    # multiplied by 10 here to match the published formulae (see this row's f_3/f_4 noted below).
+    expected_result = np.array(
+        [
+            [75550.6, 393.59, 2688570, 297434, 5188.67],  # f_3 x10
+            [66203.1, 1099.03, 797974, 3354890, 3141.07],  # f_4 x10
+            [66465.1, 1333.30, 474106, 6039030, 6159.86],  # f_4 x10
+            [70633.7, 1349.74, 1960570, 669173, 965.80],  # f_3 x10
+        ]
+    )
+
+    xs = {
+        "x_1": [0.1312, 0.3663, 0.4444, 0.4499],
+        "x_2": [0.0942, 0.0280, 0.0166, 0.0687],
+        "x_3": [0.0354, 0.0142, 0.0280, 0.0149],
+    }
+
+    res = evaluator.evaluate(xs)
+
+    for i in range(len(res)):
+        obj_values = np.array([res[obj.symbol][i] for obj in problem.objectives])
+        assert np.allclose(obj_values, expected_result[i], rtol=2e-2)
