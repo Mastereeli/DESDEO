@@ -315,7 +315,7 @@ export async function get_maps(
 /**
  * Initializes a new NIMBUS state for a given problem, or retrieves the latest one.
  */
-export async function initialize_nimbus_state(problem_id: number): Promise<Response | null> {
+export async function initialize_rpm_state(problem_id: number): Promise<Response | null> {
 	isLoading.set(true);
 	errorMessage.set(null);
 

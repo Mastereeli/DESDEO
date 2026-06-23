@@ -1,67 +1,4 @@
 <script lang="ts">
-	/**
-	 * +page.svelte (NIMBUS method)
-	 *
-	 * @author Stina (Functionality) <palomakistina@gmail.com>
-	 * @author Giomara Larraga (Base structure)<glarragw@jyu.fi>
-	 * @created July 2025
-	 *
-	 * @description
-	 * This page implements the NIMBUS interactive multiobjective optimization method in DESDEO.
-	 * It displays a sidebar with problem information, a solution explorer with a combobox to select solution types,
-	 * and a resizable pane layout for visualizing the objective and decision spaces, as well as solution tables.
-	 *
-	 * The implementation supports two main modes:
-	 * - Iterate: For viewing and selecting preferences for solutions, and iterating to find new solutions
-	 * - Final: For displaying the final selected solution
-	 *
-	 * @props
-	 * @property {Object} data - Contains a list of optimization problems fetched from the server.
-	 * @property {ProblemInfo[]} data.problems - List of problems.
-	 *
-	 * @features
-	 * - Sidebar with problem information and preference types.
-	 * - Toggle between iteration and intermediate solution modes.
-	 * - Solution explorer with a combobox to select between "Current", "Best", and "All" solutions.
-	 * - Responsive, resizable layout with visualization panels.
-	 * - Visualization of objective space and decision space (map for problems with utopia metadata).
-	 * - Solution tables with saving, renaming, and removing functionality.
-	 * - Support for intermediate solution generation between two selected solutions.
-	 * - Final solution selection and confirmation.
-	 *
-	 * @dependencies
-	 * - BaseLayout: Layout component for the method view.
-	 * - AppSidebar: Sidebar component for preferences and problem info.
-	 * - SolutionTable: Table component for displaying solutions.
-	 * - VisualizationsPanel: Component for displaying objective space visualizations.
-	 * - UtopiaMap: Component for displaying maps (for problems with utopia metadata).
-	 * - SegmentedControl: For mode selection UI.
-	 * - Combobox: For solution type selection.
-	 * - Button: UI component for actions like finishing.
-	 * - ConfirmationDialog: For confirming actions.
-	 * - InputDialog: For renaming saved solutions.
-	 * - methodSelection: Svelte store for the currently selected problem.
-	 * - LoadingSpinner: For showing a loading state during long operations.
-	 * - Alert: For displaying dismissible error messages.
-	 *
-	 * @notes
-	 * - The selected problem is determined from the methodSelection store.
-	 * - Maps are only displayed for problems with utopia metadata.
-	 * - Helper functions are imported from 'helper-functions.ts' for common operations.
-	 * - State is managed using Svelte's reactive $state and $derived declarations.
-	 *
-	 * @modes
-	 * 1. Iterate Mode:
-	 *    - Default mode when starting NIMBUS method
-	 *    - Shows preferences sidebar with reference point UI
-	 *    - Allows user to set preferences and iterate to new solutions
-	 *    - Displays solution table with current, saved, or all solutions
-	 *
-	 * 2. Final Mode:
-	 *    - Displayed after the user selects a final solution
-	 *    - Shows a simplified layout focused on the chosen solution
-	 *    - Removes sidebar and controls, presenting just the final results
-	 */
 	// Layout and core components
 	import { BaseLayout } from '$lib/components/custom/method_layout/index.js';
 	import { methodSelection } from '../../../stores/methodSelection';
@@ -95,7 +32,7 @@
 	} from './helper-functions';
 
 	import type { ProblemInfo, Solution, SolutionType, MethodMode, PeriodKey } from '$lib/types';
-	import type { Response, MapState } from './types';
+	import type { Response, ReferencePoint, MapState } from './types';
 
 	// State for NIMBUS iteration management
 	let current_state: Response = $state({} as Response);
@@ -167,9 +104,9 @@
 		mapDescription: undefined
 	});
 
-	// Validation: solving should always be allowed in reference point method.
-	let is_solving_allowed = $derived(() => {
-		// Solving should always be allowed.
+	// Validation: iteration should always be allowed in reference point method.
+	let is_iteration_allowed = $derived(() => {
+		// Iteration should always be allowed.
 		return true;
 	});
 
@@ -237,7 +174,7 @@
 		handle_remove_saved as handleRemoveSavedRequest,
 		handle_finish as handleFinishRequest,
 		get_maps as getMapsRequest,
-		initialize_nimbus_state as initializeNimbusStateRequest
+		initialize_rpm_state as initializeRPMStateRequest
 	} from './handlers';
 	import EndStateView from '../GNIMBUS/components/EndStateView.svelte';
 
@@ -329,6 +266,16 @@
 		}
 	}
 
+	function buildReferencePoint(problem: ProblemInfo, preferenceValues: number[]): ReferencePoint {
+            return {
+                    preference_type: 'reference_point',
+                    aspiration_levels: problem.objectives.reduce((acc, obj, idx) => {
+                            acc[obj.symbol] = preferenceValues[idx] ?? obj.ideal ?? 0;
+                            return acc;
+                    }, {} as Record<string, number>)
+            };
+    }
+
 	// The optional unused values are kept for compatibility with the AppSidebar component
 	async function handle_iterate(data: {
 		numSolutions: number;
@@ -344,8 +291,8 @@
 			console.error('No preferences set');
 			return;
 		}
-		if (!is_solving_allowed()) {
-			console.error('Solving not allowed for an unknown reason');
+		if (!is_iteration_allowed()) {
+			console.error('Iteration not allowed for an unknown reason');
 			return;
 		}
 
@@ -488,15 +435,15 @@
 				hasUtopiaMetadata = checkUtopiaMetadata(problem);
 
 				// Initialize NIMBUS state from the API
-				await initialize_nimbus_state(problem.id);
+				await initialize_rpm_state(problem.id);
 
 			}
 		}
 	});
 
 	// Initialize NIMBUS state by calling the API endpoint
-	async function initialize_nimbus_state(problem_id: number) {
-		const result = await initializeNimbusStateRequest(problem_id);
+	async function initialize_rpm_state(problem_id: number) {
+		const result = await initializeRPMStateRequest(problem_id);
 		if (result) {
 			// Store response data
 			let current_solutions = result.current_solutions || [];
@@ -516,7 +463,6 @@
 				current_state.saved_solutions,
 				current_state.all_solutions
 			);
-
 			// Initialize other state
 			selected_iteration_index = [0];
 			update_iteration_selection(current_state);
@@ -546,7 +492,7 @@
 </script>
 
 <svelte:head>
-	<title>RPM | DESDEO</title>
+	<title>Reference Point | DESDEO</title>
 	<meta name="description" content="This page implements the Reference Point interactive multiobjective optimization method in DESDEO" />
 </svelte:head>
 
@@ -647,7 +593,7 @@
 					typePreferences={type_preferences}
 					preferenceValues={current_preference}
 					objectiveValues={Object.values(selected_iteration_objectives)}
-					isIterationAllowed={is_solving_allowed()}
+					isIterationAllowed={is_iteration_allowed()}
 					lastIteratedPreference={last_iterated_preference}
 					onPreferenceChange={handle_preference_change}
 					onIterate={handle_iterate}
