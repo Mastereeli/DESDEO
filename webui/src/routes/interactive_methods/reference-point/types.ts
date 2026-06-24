@@ -1,6 +1,6 @@
 /*Types specific for NIMBUS */
 
-import type { ReferencePoint, NIMBUSFinalizeResponse } from "$lib/gen/endpoints/DESDEOFastAPI";
+import type { ReferencePoint, RPMStateScalarizationOptions, RPMStateSolverOptions, SolverResults, NIMBUSFinalizeResponse } from "$lib/gen/endpoints/DESDEOFastAPI";
 import type { BaseMethodResponse, PeriodKey, Solution } from "$lib/types";
 
 // Type for objective values in reference points and solutions
@@ -10,13 +10,13 @@ export type ObjectiveValues = {
 
 // General response type that includes all possible fields
 export type Response = BaseMethodResponse & {
-	response_type: 'nimbus.classification' | 'nimbus.initialization' | 'nimbus.intermediate' | 'nimbus.finalize';
-    previous_preference?: ReferencePoint;
-    previous_objectives?: ObjectiveValues;
-    reference_solution_1?: ObjectiveValues;
-    reference_solution_2?: ObjectiveValues;
+	id?: number | null;
+	preferences?: ReferencePoint;
+	scalarization_options: RPMStateScalarizationOptions;
+	solver: string | null;
+	solver_options: RPMStateSolverOptions;
+	solver_results?: SolverResults[];
 } & {
-	response_type: 'nimbus.finalize';
 	state_id: number | null;
 	final_solution: Solution;
 	saved_solutions: Solution[];

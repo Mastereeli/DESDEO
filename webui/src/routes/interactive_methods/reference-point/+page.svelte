@@ -26,9 +26,8 @@
 	import {
 		checkUtopiaMetadata,
 		mapSolutionsToObjectiveValues,
+		updateSolutionNames,
 		updatePreferencesFromState,
-		processPreviousObjectiveValues,
-		updateSolutionNames
 	} from './helper-functions';
 
 	import type { ProblemInfo, Solution, SolutionType, MethodMode, PeriodKey } from '$lib/types';
@@ -153,11 +152,7 @@
 	}
 	// Actual function to handle finishing after confirmation
 	async function handle_finish(final_solution: Solution, index: number) {
-		if (!current_state.previous_preference) {
-			console.error('No previous preference values found for finishing.');
-			return;
-		}
-		const response = await handleFinishRequest(problem, final_solution, current_state.previous_preference);
+		const response = await handleFinishRequest(problem, final_solution);
 		if (response) {
 			// Update the selected iteration index to match our final solution
 			// This will ensure that in final mode we show the correct solution
@@ -299,8 +294,6 @@
 		const result = await handleIterateRequest(
 			problem,
 			current_preference,
-			selected_iteration_objectives,
-			current_num_iteration_solutions
 		);
 
 		if (result) {
@@ -468,9 +461,9 @@
 			update_iteration_selection(current_state);
 			update_preferences_from_state(current_state);
 			current_num_iteration_solutions = current_state.current_solutions.length;
-			if (current_state.response_type === 'nimbus.finalize') {
+			/*if (current_state.response_type === 'nimbus.finalize') {
 				mode = 'final';
-			}
+			} Set into finalized stage if the problem has been finalized with RPM before. Does not work the same way as with nimbus. */
 		}
 	}
 
@@ -625,7 +618,7 @@
 			>
 				<Button
 					onclick={selectedIndexes.length === 1 ? confirm_finish : undefined}
-					disabled={selectedIndexes.length !== 1 || current_state.response_type === 'nimbus.finalize'}
+					disabled={selectedIndexes.length !== 1}
 					variant="destructive"
 					class="ml-10"
 				>
@@ -650,9 +643,6 @@
 								currentPreferenceType={type_preferences}
 								solutionsObjectiveValues={problem
 									? mapSolutionsToObjectiveValues(chosen_solutions, problem)
-									: []}
-								previousObjectiveValues={selected_type_solutions === 'current'
-									? processPreviousObjectiveValues(current_state, problem)
 									: []}
 								externalSelectedIndexes={selectedIndexes}
 								onSelectSolution={handle_solution_click}
@@ -697,18 +687,7 @@
 					{selected_type_solutions}
 					secondaryObjectiveValues={selected_type_solutions === 'current'
 						? problem
-							? [
-									// Add previous_objectives if it exists
-									...(current_state.previous_objectives ? [current_state.previous_objectives] : []),
-									// Add reference_solution_1 if it exists
-									...(current_state.reference_solution_1
-										? [current_state.reference_solution_1]
-										: []),
-									// Add reference_solution_2 if it exists
-									...(current_state.reference_solution_2
-										? [current_state.reference_solution_2]
-										: [])
-								]
+							? []
 							: []
 						: []}
 				/>

@@ -12,13 +12,12 @@
 import type {
 	ProblemInfo,
 	SolutionReferenceResponse,
-	NIMBUSClassificationResponse,
-	NIMBUSInitializationResponse
+	RPMState,
 } from '$lib/gen/endpoints/DESDEOFastAPI';
 
 // Type definitions for NIMBUS components
 type Solution = SolutionReferenceResponse;
-type Response = NIMBUSClassificationResponse | NIMBUSInitializationResponse;
+type Response = RPMState;
 
 /**
  * Checks if a problem has utopia metadata for map visualization
@@ -67,9 +66,9 @@ export function updatePreferencesFromState(
 	if (!problem) return [];
 
 	// Try to get previous preference from NIMBUS state
-	if (state && 'previous_preference' in state && state.previous_preference) {
+	if (state && 'preferences' in state && state.preferences) {
 		// Extract aspiration levels from previous preference
-		const previous_pref = state.previous_preference as {
+		const previous_pref = state.preferences as {
 			aspiration_levels?: Record<string, number>;
 		};
 		if (previous_pref.aspiration_levels) {
@@ -103,97 +102,6 @@ export function convertObjectiveToArray(
 		const value = objectiveObj[obj.symbol];
 		return value !== undefined && value !== null ? (Array.isArray(value) ? value[0] : value) : 0;
 	});
-}
-
-/**
- * Processes previous objective values and reference solutions for visualization components
- *
- * @param state The current NIMBUS response state
- * @param problem The problem containing objective definitions
- * @returns Array of arrays with previous objective values
- */
-export function processPreviousObjectiveValues(
-	state: any,
-	problem: ProblemInfo | null
-): number[][] {
-	if (!problem || !state) {
-		return [];
-	}
-
-	const result: number[][] = [];
-
-	// Add previous_objectives if it exists
-	if (state.previous_objectives) {
-		result.push(convertObjectiveToArray(state.previous_objectives, problem));
-	}
-
-	// Add reference_solution_1 if it exists
-	if (state.reference_solution_1) {
-		result.push(convertObjectiveToArray(state.reference_solution_1, problem));
-	}
-
-	// Add reference_solution_2 if it exists
-	if (state.reference_solution_2) {
-		result.push(convertObjectiveToArray(state.reference_solution_2, problem));
-	}
-
-	return result;
-}
-
-/**
- * Validates if iteration is allowed based on preferences and objectives
- * Iteration requires at least one preference to be better and one to be worse
- * @param problem The current problem
- * @param preferenceValues Current preference values
- * @param objectiveValues Current objective values
- * @param precision Precision threshold for floating point comparisons
- * @returns Boolean indicating if iteration is allowed
- */
-export function validateIterationAllowed(
-	problem: ProblemInfo | null,
-	preferenceValues: number[],
-	objectiveValues: Record<string, number>,
-	precision: number = 0.001
-): boolean {
-	if (!problem || preferenceValues.length === 0 || Object.keys(objectiveValues).length === 0) {
-		return false;
-	}
-
-	let hasImprovement = false;
-	let hasWorsening = false;
-
-	for (let i = 0; i < problem.objectives.length; i++) {
-		const objective = problem.objectives[i];
-		const preferenceValue = preferenceValues[i];
-		const currentValue = objectiveValues[objective.symbol];
-
-		if (preferenceValue === undefined || currentValue === undefined) {
-			continue;
-		}
-
-		// Check if values are approximately equal (within precision)
-		const isEqual = Math.abs(preferenceValue - currentValue) < precision;
-
-		if (isEqual) {
-			// Values are approximately equal - "keep constant"
-			continue;
-		}
-
-		// Determine if preference is better than current value, considering optimization direction
-		const isPreferenceBetter = objective.maximize
-			? preferenceValue > currentValue
-			: preferenceValue < currentValue;
-
-		// Update improvement or worsening flags based on comparison
-		if (isPreferenceBetter) {
-			hasImprovement = true;
-		} else {
-			hasWorsening = true;
-		}
-	}
-
-	// Need both improvement and worsening for valid NIMBUS classification
-	return hasImprovement && hasWorsening;
 }
 
 /**

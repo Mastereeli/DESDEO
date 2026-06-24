@@ -5,25 +5,21 @@
  * replacing the previous +server.ts proxy + callNimbusAPI pattern.
  */
 import {
-	solveSolutionsMethodNimbusSolvePost,
-	getOrInitializeMethodNimbusGetOrInitializePost,
+	solveSolutionsMethodRpmSolvePost,
 	saveMethodNimbusSavePost,
 	deleteSaveMethodNimbusDeleteSavePost,
 	finalizeNimbusMethodNimbusFinalizePost,
-	solveNimbusIntermediateMethodNimbusIntermediatePost,
 	getUtopiaDataUtopiaPost
 } from '$lib/gen/endpoints/DESDEOFastAPI';
 import type {
-	NIMBUSClassificationRequest,
-	NIMBUSInitializationRequest,
+	RPMSolveRequest,
 	NIMBUSSaveRequest,
 	NIMBUSDeleteSaveRequest,
 	NIMBUSFinalizeRequest,
-	IntermediateSolutionRequest,
 	SolutionInfo
 } from '$lib/gen/endpoints/DESDEOFastAPI';
 import type { ProblemInfo, Solution } from '$lib/types';
-import type { Response, ReferencePoint, FinishResponse } from './types';
+import type { Response, ReferencePoint } from './types';
 import { errorMessage, isLoading } from '../../../stores/uiState';
 
 /** Convert a Solution (SolutionReferenceResponse) to a SolutionInfo for API requests. */
@@ -36,62 +32,11 @@ function toSolutionInfo(solution: Solution, name?: string | null): SolutionInfo 
 }
 
 /**
- * Handles the generation of intermediate solutions between two selected reference solutions.
- */
-export async function handle_intermediate(
-	problem: ProblemInfo | null,
-	selected_solutions: Solution[],
-	num_desired: number
-): Promise<Response | null> {
-	if (!problem) {
-		errorMessage.set('No problem selected');
-		console.error('No problem selected');
-		return null;
-	}
-	if (selected_solutions.length !== 2) {
-		errorMessage.set('Exactly 2 solutions must be selected for intermediate solutions');
-		console.error('Exactly 2 solutions must be selected for intermediate solutions');
-		return null;
-	}
-
-	isLoading.set(true);
-	errorMessage.set(null);
-
-	try {
-		const request: IntermediateSolutionRequest = {
-			problem_id: problem.id,
-			reference_solution_1: toSolutionInfo(selected_solutions[0]),
-			reference_solution_2: toSolutionInfo(selected_solutions[1]),
-			num_desired: num_desired
-		};
-
-		const response = await solveNimbusIntermediateMethodNimbusIntermediatePost(request);
-
-		if (response.status !== 200) {
-			errorMessage.set(`Intermediate solutions failed with status ${response.status}`);
-			console.error('NIMBUS intermediate failed:', response.status);
-			return null;
-		}
-
-		return response.data as unknown as Response;
-	} catch (error) {
-		const msg = error instanceof Error ? error.message : 'Unknown error';
-		errorMessage.set(msg);
-		console.error('Error in handle_intermediate:', msg);
-		return null;
-	} finally {
-		isLoading.set(false);
-	}
-}
-
-/**
- * Handles a NIMBUS iteration based on user-defined preferences and classifications.
+ * Handles a RPM iteration based on user-defined preference points.
  */
 export async function handle_iterate(
 	problem: ProblemInfo,
 	current_preference: number[],
-	selected_iteration_objectives: Record<string, number>,
-	current_num_iteration_solutions: number
 ): Promise<Response | null> {
 	isLoading.set(true);
 	errorMessage.set(null);
@@ -108,18 +53,16 @@ export async function handle_iterate(
 			)
 		};
 
-		const request: NIMBUSClassificationRequest = {
+		const request: RPMSolveRequest = {
 			problem_id: problem.id,
-			current_objectives: selected_iteration_objectives,
-			num_desired: current_num_iteration_solutions,
 			preference: preference
 		};
 
-		const response = await solveSolutionsMethodNimbusSolvePost(request);
+		const response = await solveSolutionsMethodRpmSolvePost(request);
 
 		if (response.status !== 200) {
 			errorMessage.set(`Iteration failed with status ${response.status}`);
-			console.error('NIMBUS iterate failed:', response.status);
+			console.error('RPM iterate failed:', response.status);
 			return null;
 		}
 
@@ -142,6 +85,7 @@ export async function handle_save(
 	solution: Solution,
 	name: string | undefined
 ): Promise<boolean> {
+	return false; // No RPM equivalent to saveMethodNimbusSavePost
 	if (!problem) {
 		errorMessage.set('No problem selected');
 		console.error('No problem selected');
@@ -183,6 +127,7 @@ export async function handle_remove_saved(
 	problem: ProblemInfo | null,
 	solution: Solution
 ): Promise<boolean> {
+	return false; // No RPM equivalent to deleteSaveMethodNimbusDeleteSavePost
 	if (!problem) {
 		errorMessage.set('No problem selected');
 		console.error('No problem selected');
@@ -224,8 +169,8 @@ export async function handle_remove_saved(
 export async function handle_finish(
 	problem: ProblemInfo | null,
 	solution: Solution,
-	preferences: ReferencePoint
 ): Promise<boolean> {
+	return false; // No RPM equivalent to finalizeNimbusMethodNimbusFinalizePost
 	if (!problem) {
 		errorMessage.set('No problem selected');
 		console.error('No problem selected');
@@ -320,23 +265,11 @@ export async function initialize_rpm_state(problem_id: number): Promise<Response
 	errorMessage.set(null);
 
 	try {
-		const request: NIMBUSInitializationRequest = {
-			problem_id: problem_id
-		};
-
-		const response = await getOrInitializeMethodNimbusGetOrInitializePost(request);
-
-		if (response.status !== 200) {
-			errorMessage.set(`Initialization failed with status ${response.status}`);
-			console.error('NIMBUS initialization failed:', response.status);
-			return null;
-		}
-
-		return response.data as unknown as Response;
+		return {id: problem_id} as unknown as Response;
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : 'Unknown error';
 		errorMessage.set(msg);
-		console.error('Error in initialize_nimbus_state:', msg);
+		console.error('Error in initialize_rpm_state:', msg);
 		return null;
 	} finally {
 		isLoading.set(false);
